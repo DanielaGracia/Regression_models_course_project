@@ -1,0 +1,196 @@
+---
+title: "Regression Models Course Project"
+author: "Daniela Gracia"
+date: "May 18, 2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+geometry: "left=2cm,right=2cm,top=1.5cm,bottom=3cm"
+---
+<style>
+body {
+text-align: justify}
+</style>
+
+### Synopsis
+In this project we will be using the mtcars data set, this data originates from the 1974 Motor Trend US magazine. We are interested in exploring the relationship between a set of variables and miles per gallon (MPG). Particularly, we want to answer the following questions: **1.¿Is an automatic or manual transmission better for MPG?**, **2.Quantify the MPG difference between automatic and manual transmissions**. Our study concludes that when creating a multivariate regression model it is not possible to say that one transmission is better than the other, therefore it is not possible to quantify this relationship using a multivariate model. Other models should be evaluated to see if this relationship can be better explained and quantified. 
+### Exploratory Data Analysis
+First we load and explore the data (see Appendix 1).
+```{r chunk1, echo=FALSE, results="hide"}
+# load the data
+data(mtcars)
+# view structure of the data
+str(mtcars)
+```
+We see our data set contains 11 variables, the units and meaning of those variables can be found in the ?mtcars page.
+```{r chunk2, echo=FALSE, message=FALSE, results='hide'}
+# We will now change the names and classes of some of the variables to make the analysis more meaningful.
+# load required packages
+library(dplyr)
+# rename and factor variables
+mtcars2 <- mtcars
+mtcars2 <- rename(mtcars2, transm=am, weight=wt, engine=vs)
+mtcars2$transm <- as.factor(mtcars2$transm)
+levels(mtcars2$transm) <- c("automatic", "manual")
+#calculate the mean of each group
+mtcars  <- mtcars %>% group_by(am)
+means <- summarise(mtcars, mean(mpg))
+mean_auto <- round(means[[1,2]],2)
+mean_manual <- round(means[[2,2]],2)
+```
+Now we create a box plot (see Appendix 2) to see the distribution of MPG for automatic vs manual cars (there are 19 automatic and 13 manual vehicles). In the graph we can see that manual vehicles have a higher average of `r mean_manual` vs automatic cars which have an average of `r mean_auto`.
+```{r chunk3, echo=FALSE, message=FALSE, fig.show='hide', results='hide',fig.height=3, fig.width=3, fig.align='left'}
+# load required packages
+library(ggplot2)
+
+# create boxplot by transmission 
+plot1 <- mtcars2 %>% 
+        ggplot(aes(x=transm, y=mpg, fill=transm, alpha=0.6)) + 
+        geom_boxplot(show.legend=FALSE) + 
+        scale_fill_manual( values=c("#38c7a6", "#766aaf")) +
+        geom_jitter(color="black", size=0.4, alpha=0.9, show.legend=FALSE) + 
+        labs(x="transmission",y="miles per gallon (mpg)",
+        title=" MPG for automatic vs manual vehicles") +
+        theme(plot.title = element_text(hjust = 0.5, 
+        size =9, face="bold"), 
+        axis.title =  element_text(size = 8),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 7)) 
+plot1
+```
+### Model Selection & Regression Analysis
+Now that we have a better understatement of the distribution of the data, we will consider some of the variables and decide which ones we want to include in our models. The models will be tested through nested modeling. Our goal is to see which variables help us best describe the relationship between mpg and transmission type.      
+   
+#### Univariate Regression
+First we see the relationship between mpg and transmission by fitting a linear regression (see Appendix 3).
+```{r chunk5, echo=FALSE, results='hide'}
+model1 <- lm(mpg ~ transm, data=mtcars2)
+summary(model1)
+```
+We interpret this model in the following way: for automatic transmission the mean mpg is $17.147\pm1.13\ mpg$ and for manual transmission we expect an average increase of $7.245\pm1.76\  mpg$. Both of these values are statistically significant with p values < 0.05. This model suggests that manual transmissions are better for mpg. Additionally, The r-squared value implies that these model is able to explain 36% of the total variation. Now we will move on to nested modeling to see what is the best way to explain more variation while maintaining a consistent model.
+   
+#### Multivariate Regression
+As we have a relatively small number of independent variables we will run the anova() function for the complete model and select the variables that have the most statistically significant values (see Appendix 4).
+```{r chunk6, echo=FALSE, results='hide'}
+# we build the complete model
+model <- lm(mpg~.,data=mtcars2)
+anova(model)
+```
+We see that the variables cyl, weight and disp are, in that order, statistically significant (pvalue < 0.05). So we will use them to create 3 models we believe will help explain the relationship between MPG and automatic/manual vehicles. Then we compare these models using anova() (see Appendix 5).
+```{r chunk7, echo=FALSE, results='hide'}
+# first model includes cyl
+model2 <- lm(mpg ~ transm + cyl, data=mtcars2)
+# second model includes cyl and weight
+model3 <- lm(mpg ~ transm + cyl+ weight, data=mtcars2)
+# third model includes cyl, weight and disp
+model4 <- lm(mpg ~ transm + cyl + weight + disp, data=mtcars2)
+# we compare the models 
+anova(model1, model2, model3, model4)
+```
+We can see that including cyl in the model produces highly statistically significant results and so does the addition of weight. However when adding disp the pvalue of 0.5 (>>0.05) suggests that this is not necessary in the model. We believe that model 3: **lm(mpg ~ transm + cyl+ weight)** is the best/most parsimonious relationship we can provide. Now, lets take a look at the model:
+
+$$Y=\beta_0+\beta_1X_1+\beta_2X_2+\beta_3X_3+\epsilon$$
+$X_1$ is the transmission, 0 if automatic and 1 if manual, $X_2$ is the number of cylinders (4, 6 or 8) and $X_3$ is the weight of the vehicle (1000 lbs). Let´s take a look at the estimated coefficients.
+\footnotesize
+```{r chunk8, echo=FALSE}
+# we now see what the coefficients are for the model
+summary(model3)
+```
+\normalsize
+We interpret this model in the following way: The r-squared value implies that this model is able to explain 83% of the total variation, which is a significant improvement from the 36% the previous model explained. Considering all other predictors remain constant:   
+$\beta_0$: Suggests an average mpg usage for automatic transmissions of $39.42\pm2.64\ mpg$.  
+$\beta_1$: Suggests an estimated average $0.18\pm1.30\ mpg$ increase for manual transmissions, however the error is much larger than the estimate and the p-value suggests this is not a significant result.     
+$\beta_2$: Suggests a strong negative relationship between mpg and cyl, for every one unit increase in cyl there is an average $1.51\pm0.42\ mpg$ decrease.  
+$\beta_3$: Suggests a strong negative relationship between cyl and mpg, for every 1000 lbs increase in weight there is an average $3.13\pm0.91\ mpg$ decrease.
+
+$\beta_0$, $\beta_2$ and $\beta_3$ provide significant results with p-values under 0.05, however $\beta_1$ does not seem to be a significant value as it fails to reject the null hypothesis: $H_0:\mu_a=\mu_m$. Lets take a look at the residuals to see if they suggest anything about our model.
+
+### Residual Analysis and Conclusions
+First we produce some plots to study the residuals (see Appendix 6). From the plots we can see:
+```{r chunk9, echo=FALSE, results='hide', fig.show='hide'}
+par(mfrow = c(2,2))
+plot(model3)
+```
+**Residuals vs Fitted:** This plot doesn't have any major trends, the only thing to note is that there are slightly higher residuals for smaller and higher fitted values. **Normal Q-Q:** This plot suggests that the errors follow a normal distribution, which is how we want this plot to look. **Scale-Location:** This plot has a semi-horizontal trend with the data points equally distributed around it, which suggests nothing abnormal about it. **Residuals vs Leverage:** None of the points in this plot are outside Cooks distance, which means none of the points are influential. 
+  
+In conclusion, the residual analysis suggests the model fit is okay, it would be interesting to look at what is causing the slight pattern in the residuals vs fitted values plot, this might help better explain an quantify the relationship between MPG and transmission in vehicles.Finally, we answer the questions:     
+**1.¿ Is an automatic or manual transmission better for MPG ?**: The univariate linear regression model has statistically significant evidence suggesting that manual transmission is better for MPG, however this model fails to explain a lot of the variation. The multivariate linear regression is able to explain a lot of the variation, however it fails to prove that one transmission is better than the other, in this model it seems like the number of cylinders and weight have a more significant impact on MPG.
+
+**2. Quantify the MPG difference between automatic and manual transmissions** For the univariate regression  there is an average expected increase of $7.245\pm1.76\  mpg$ for manual vehicles. For the multivariate model this relationship cannot be quantified as the results are not significant. 
+
+In conclusion the multivariate regression model created provides a consistent and parsimonios explanation of the relationship between MPG, transmission, cyl and weight. It would be interesting to run more model comparison tests and residual analysis to see if there is a model that explains this relationship better. 
+
+### Appendix  
+Below is all additional information needed to understand the report.
+     
+### Appendix 1   
+\footnotesize
+```{r ap1, echo=FALSE}
+# load the data
+data(mtcars)
+# view structure of the data
+str(mtcars)
+```
+\normalsize
+     
+### Appendix 2   
+```{r ap2, echo=FALSE, message=FALSE,fig.height=3, fig.width=4, fig.align='left'}
+# load required packages
+library(ggplot2)
+
+# create boxplot by transmission 
+plot1 <- mtcars2 %>% 
+        ggplot(aes(x=transm, y=mpg, fill=transm, alpha=0.6)) + 
+        geom_boxplot(show.legend=FALSE) + 
+        scale_fill_manual( values=c("#38c7a6", "#766aaf")) +
+        geom_jitter(color="black", size=0.4, alpha=0.9, show.legend=FALSE) + 
+        labs(x="transmission",y="miles per gallon (mpg)",
+        title=" MPG for automatic vs manual vehicles") +
+        theme(plot.title = element_text(hjust = 0.5, 
+        size =9, face="bold"), 
+        axis.title =  element_text(size = 8),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 7)) 
+plot1
+```
+
+### Appendix 3    
+\footnotesize
+```{r ap3, echo=TRUE}
+# create first model
+model1 <- lm(mpg ~ transm, data=mtcars2)
+summary(model1)
+```
+\normalsize     
+          
+### Appendix 4   
+\footnotesize   
+```{r ap4, echo=TRUE}
+# we build the complete model
+model <- lm(mpg~.,data=mtcars2)
+anova(model)
+```
+\normalsize   
+              
+### Appendix 5    
+\footnotesize   
+```{r ap5, echo=TRUE}
+# first model includes cyl
+model2 <- lm(mpg ~ transm + cyl, data=mtcars2)
+# second model includes cyl and weight
+model3 <- lm(mpg ~ transm + cyl+ weight, data=mtcars2)
+# third model includes cyl, weight and disp
+model4 <- lm(mpg ~ transm + cyl + weight + disp, data=mtcars2)
+# we compare the models 
+anova(model1, model2, model3, model4)
+```
+\normalsize    
+      
+### Appendix 6
+```{r ap6, echo=TRUE, fig.width=7, fig.height=6, fig.align="left"}
+# build residual analysis plots
+par(mfrow = c(2,2))
+plot(model3)
+```
+
